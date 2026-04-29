@@ -12,9 +12,26 @@ class CapacityDataset:
     ind_ood_car_dict_path='../five_fold_utils/ind_odd_dict2.npz.npy'
     ind_ood_car_dict_path='../five_fold_utils/ind_odd_dict3.npz.npy'
     '''
-    def __init__(self, all_car_dict_path=os.path.join(os.path.dirname(__file__), '../five_fold_utils/all_car_dict.npz.npy'),
-                 ind_ood_car_dict_path=os.path.join(os.path.dirname(__file__), '../five_fold_utils/ind_odd_dict1.npz.npy'),
-                 train=True, fold_num=0):
+    def __init__(self, all_car_dict_path='../five_fold_utils/all_car_dict.npz.npy',
+                 ind_ood_car_dict_path='../five_fold_utils/ind_odd_dict1.npz.npy',
+                 train=True, fold_num=0, data_root=None): 
+        
+        # --- MODIFICA 1: Rendiamo robusti anche i percorsi dei dizionari ---
+        # Calcola il percorso assoluto della cartella in cui si trova questo script
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Se viene usato il percorso relativo di default, lo converte in assoluto
+        if all_car_dict_path == '../five_fold_utils/all_car_dict.npz.npy':
+            all_car_dict_path = os.path.normpath(os.path.join(base_dir, all_car_dict_path))
+        if ind_ood_car_dict_path == '../five_fold_utils/ind_odd_dict1.npz.npy':
+            ind_ood_car_dict_path = os.path.normpath(os.path.join(base_dir, ind_ood_car_dict_path))
+
+        # 2. SALVATAGGIO DELLA DIRECTORY DEI DATI
+        if data_root is not None:
+            self.root_dir = str(data_root)
+        else:
+            self.root_dir = './battery_dataset1/data/'
+            
         self.all_car_dict = np.load(all_car_dict_path, allow_pickle=True).item()
         ind_ood_car_dict = np.load(ind_ood_car_dict_path, allow_pickle=True).item()
         self.ind_car_num_list = ind_ood_car_dict['ind_sorted']
@@ -23,6 +40,7 @@ class CapacityDataset:
         print(len(self.ind_car_num_list))
         print(len(self.ood_car_num_list))
         # self.ood_car_num_list = [186, 204, 349, 236, 136]  # used for debug
+        
         if train:
             car_number = self.ind_car_num_list[:int(fold_num * len(self.ind_car_num_list) / 5)] \
                          + self.ind_car_num_list[int((fold_num + 1) * len(self.ind_car_num_list) / 5):] \
@@ -43,10 +61,20 @@ class CapacityDataset:
         print("Loading data")
         for each_num in tqdm(car_number):
             for each_pkl in self.all_car_dict[each_num]:
-                train1 = torch.load(each_pkl)
+                
+                # --- MODIFICA 2: Sovrascrive il percorso hardcoded salvato nel dizionario ---
+                # each_pkl contiene la stringa './battery_dataset1/data/xxxx.pkl'
+                # Noi estraiamo solo "xxxx.pkl" e lo attacchiamo alla root_dir corretta
+                file_name = os.path.basename(each_pkl) 
+                actual_pkl_path = os.path.join(self.root_dir, file_name)
+                
+                # Usa il nuovo percorso generato dinamicamente
+                train1 = torch.load(actual_pkl_path)
+                
                 if train1[1]["capacity"] != 0:
                     self.battery_dataset.append(train1)
                     capacity_valid_car_number.append(train1[1]["car"])
+                    
         print("unsorted capacity_valid_car_number",
               len(set(capacity_valid_car_number)), set(capacity_valid_car_number),
               "capacity data point",
@@ -88,4 +116,3 @@ class SlidingWindowDataset_reconstruct(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.data) - self.window
-
